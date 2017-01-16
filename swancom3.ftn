@@ -1972,6 +1972,9 @@
      &                   DD      ,KWAVE   ,IMATRA  ,GENC0   ,
      &                   IDCMIN  ,IDCMAX  ,AC2     ,UFRIC   ,
      &                   PLWNDA  ,ISSTOP  ,ITER    ,USTAR   ,ZELEN   ,
+!jitd >>>
+     &                   SMEBRK  ,
+!jitd <<<
      &                   SPCDIR  ,ANYWND  ,IT               )
 !
 !******************************************************************
@@ -2160,6 +2163,10 @@
      &        PLWNDA(MDC,MSC,NPTST),
      &        USTAR(MCGRD)         ,
      &        ZELEN(MCGRD)
+!jitd >>>
+      REAL    SMEBRK
+      INTEGER ICUTOFF
+!jitd <<<
       REAL    GENC0(MDC,MSC,MGENR)                                        40.85
 !
       INTEGER IDCMIN(MSC)          ,
@@ -2192,6 +2199,10 @@
       ZALP   = 0.011                                                      40.61
       CTW    = COS(THETAW)                                                40.41
       STW    = SIN(THETAW)                                                40.41
+!jitd >>> add a cut off frequency fc = 2.5*fmean (Bidlot 2007)
+      ICUTOFF = CEILING(ALOG(SMEBRK*2.5/SPCSIG(1))/ALOG(1.1))                                                          
+      ICUTOFF = MIN(ICUTOFF, MSC)
+!jitd <<<
 !
       IF ( NSTATC.EQ.1 .AND. IT.EQ.1 ) THEN                               40.41 40.00
 !
@@ -2240,7 +2251,10 @@
 !
         UFRIC2 = UFRIC * UFRIC
 !
-        DO IS = 1, MSC-1
+!jitd >>>use a cut-off frequency to calculate the wave stress
+!        DO IS = 1, MSC-1
+        DO IS = 1, ICUTOFF-1
+!jitd <<<
           SIGMA1 = SPCSIG(IS)                                             30.72
           SIGMA2 = SPCSIG(IS+1)                                           30.72
           WAVEN1 = KWAVE(IS,1)
@@ -2307,7 +2321,8 @@
 !       *** assuming deep water conditions                         ***
 !
         GAMHF =  XKAPPA * GRAV / UFRIC
-        SIGMAX = SPCSIG(MSC)                                              30.72
+!        SIGMAX = SPCSIG(MSC)                                              30.72
+        SIGMAX = SPCSIG(ICUTOFF)                                          !jitd
         SIGHF1 = SIGMAX
         DO J=1, 50
           SIGHF2 = XIS * SIGHF1
@@ -2345,7 +2360,9 @@
 !           *** wave stress by integrating input source term in  ***
 !           *** x- and y direction respectively                  ***
 !
-            FACHFR = SIGMAX**6 * AC2(ID,MSC,KCGRD(1)) * COS2 / GRAV**2    30.21
+!            FACHFR = SIGMAX**6 * AC2(ID,MSC,KCGRD(1)) * COS2 / GRAV**2    30.21
+            FACHFR = SIGMAX**6 * AC2(ID,ICUTOFF,KCGRD(1)) 
+     &             * COS2 / GRAV**2                                       !jitd
 
             SE1 = FACHFR * BETA1 / SIGHF1
             SE2 = FACHFR * BETA2 / SIGHF2
@@ -2353,12 +2370,15 @@
             TXHFR = TXHFR + 0.5 * ( SE1 + SE2 ) * DS * COSWAV
             TYHFR = TYHFR + 0.5 * ( SE1 + SE2 ) * DS * SINWAV
 !
+!jitd >>> !!! loop of directions should be ended here
+          ENDDO
 !           *** if coeffcient BETA = 0. for a frequency over ***
 !           *** all directions is zero skip loop             ***
 !
             IF ( AUX .EQ. 0. ) GOTO 5000
 !
-          ENDDO
+!          ENDDO
+!jitd<<<
 !
           IF (ITEST.GE. 45 ) THEN
             WRITE(PRINTF,407) XIS, SIGHF1, SIGHF2, J
@@ -2395,6 +2415,10 @@
  301      FORMAT(' SW4: Tauw Taut  ratio :',3E12.4,' in ',I5)
         ENDIF
 !
+!------------------------------------------------------------------------------
+!jitd >>>
+!      replace SWAN stress table with WAM stress table
+       IF(.FALSE.) THEN
         DO II = 1, 20
 !         *** start iteration process ***
           FA = SQRT ( 1. - TAUW / TAUTOT )
@@ -2444,6 +2468,23 @@
 !
         ZO     = ALPHA * UFRIC * UFRIC / GRAV
         ZE     = ZO / SQRT ( 1. - TAUW / TAUTOT )
+!------------------------------------------------------------------------------
+!      WAM stress table
+       ELSE
+        DO II = 1, 20
+          FA    = TAUW/TAUTOT
+          UFRIC = SQRT(TAUTOT)
+          ZE    = ALPHA*TAUTOT/GRAV/SQRT(1-FA)
+          FCEN  = UFRIC-XKAPPA*WIND10/ALOG(ZTEN/ZE)
+          DCEN  = 1-XKAPPA*WIND10/(ALOG(ZTEN/ZE))**2
+     &          * 2/UFRIC*(1-1.5*FA)/(1-FA)
+          UFRIC = UFRIC-FCEN/DCEN
+          TAUTOT= MAX(UFRIC**2, TAUW+1E-5)
+          IF (ABS(FCEN) < 1E-10) EXIT
+        enddo
+       ENDIF !IF(.FALSE.)
+!jitd <<<
+!------------------------------------------------------------------------------
 !
         USTAR(KCGRD(1)) = UFRIC
         ZELEN(KCGRD(1)) = ZE

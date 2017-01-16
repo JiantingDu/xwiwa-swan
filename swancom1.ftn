@@ -6584,6 +6584,9 @@
      &                DDIR    ,KWAVE   ,IMATRA  ,GENC0   ,
      &                IDCMIN  ,IDCMAX  ,AC2     ,UFRIC   ,
      &                PLWNDA  ,ISSTOP  ,ITER    ,USTAR   ,ZELEN   ,
+!jitd >>>
+     &                SMEBRK  ,
+!jitd <<<
      &                SPCDIR  ,ANYWND  ,IT      )
 !
       ELSE IF ( IWIND .EQ. 5 ) THEN
